@@ -1,0 +1,10 @@
+yt-dlp
+opencv-python
+easyocr
+openai
+python-dotenv
+scikit-learn
+pandas
+numpy
+matplotlib
+streamlit
