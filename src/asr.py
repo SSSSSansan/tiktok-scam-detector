@@ -94,7 +94,7 @@ def transcribe(video_path) -> dict:
                 segments.append({"start": round(s.start, 2), "end": round(s.end, 2), "text": text})
         lang = (resp.language or "").lower()
         result = {
-            "language": LANG_CODES.get(lang, lang or None),
+            "language": LANG_CODES.get(lang, lang or None) if segments else None,
             "text": " ".join(s["text"] for s in segments),
             "segments": segments,
         }

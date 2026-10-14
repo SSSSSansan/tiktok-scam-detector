@@ -13,3 +13,10 @@ temp_video.wav
 .venv/
 __pycache__/
 *.pyc
+.venv/
+.env
+__pycache__/
+data/videos/
+data/cache/*.mp3
+*.pyc
+.DS_Store

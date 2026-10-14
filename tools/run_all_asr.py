@@ -2,10 +2,11 @@
 Прогон ASR по всему датасету с оценкой стоимости ДО того, как потратишь деньги.
 
 Из корня репозитория:
-  python tools/run_asr_all.py                    # только оценка (бесплатно, ничего не отправляет в OpenAI)
-  python tools/run_asr_all.py --download         # + скачать недостающие видео (бесплатно)
-  python tools/run_asr_all.py --run --limit 10   # реально распознать первые 10 видео (платно)
-  python tools/run_asr_all.py --run              # распознать все (платно)
+  python tools/run_all_asr.py                          # только оценка (бесплатно)
+  python tools/run_all_asr.py --download --only tiktok # скачать недостающие TikTok (бесплатно)
+  python tools/run_all_asr.py --download --only instagram --cookies chrome
+  python tools/run_all_asr.py --run --limit 10         # распознать первые 10 (платно)
+  python tools/run_all_asr.py --run                    # распознать все (платно)
 """
 import argparse
 import csv
@@ -20,6 +21,9 @@ from src.asr import CACHE_DIR, MAX_AUDIO_SECONDS, has_audio, transcribe  # noqa:
 LABELS = Path("data/labels.csv")
 VIDEO_DIR = Path("data/videos")
 PRICE_PER_MIN = 0.006  # $ за минуту звука, whisper-1
+ATTEMPTS = 3           # сколько раз пробуем скачать одно видео
+RETRY_SLEEP = 3        # пауза между попытками растёт: 3, 6, 9 сек
+PAUSE_BETWEEN = 2      # пауза между разными видео, чтобы TikTok не блокировал за частые запросы
 
 
 def video_duration(path: Path) -> float:
@@ -33,14 +37,30 @@ def video_duration(path: Path) -> float:
         return 0.0
 
 
-def download(url: str, path: Path) -> bool:
-    subprocess.run(["yt-dlp", "-q", "--no-warnings", "-o", str(path), url], capture_output=True, text=True)
-    return path.exists()
+def download(url: str, path: Path, cookies=None):
+    """Возвращает (успех, причина_ошибки). Недокачанные куски yt-dlp докачивает сам."""
+    cmd = ["yt-dlp", "-q", "--no-warnings", "--retries", "10", "--socket-timeout", "30"]
+    if cookies:
+        cmd += ["--cookies-from-browser", cookies]
+    cmd += ["-o", str(path), url]
+
+    last_err = ""
+    for attempt in range(1, ATTEMPTS + 1):
+        r = subprocess.run(cmd, capture_output=True, text=True)
+        if path.exists():
+            return True, ""
+        lines = r.stderr.strip().splitlines()
+        last_err = lines[-1][:200] if lines else "неизвестная ошибка"
+        if attempt < ATTEMPTS:
+            time.sleep(RETRY_SLEEP * attempt)
+    return False, last_err
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--download", action="store_true", help="скачать недостающие видео")
+    ap.add_argument("--only", choices=["tiktok", "instagram"], help="скачивать только эту платформу")
+    ap.add_argument("--cookies", default=None, help="браузер для входа в аккаунт, например chrome или safari")
     ap.add_argument("--run", action="store_true", help="реально вызвать OpenAI (платно)")
     ap.add_argument("--limit", type=int, default=None, help="сколько видео распознать при --run")
     args = ap.parse_args(argv)
@@ -51,20 +71,25 @@ def main(argv=None):
 
     # 1. скачивание недостающих
     if args.download:
+        todo_dl = [r for r in rows
+                   if not (VIDEO_DIR / f"{r['video_id']}.mp4").exists()
+                   and (not args.only or r["platform"] == args.only)]
+        print(f"Нужно скачать: {len(todo_dl)}")
         failed = []
-        for r in rows:
+        for i, r in enumerate(todo_dl, 1):
             path = VIDEO_DIR / f"{r['video_id']}.mp4"
-            if path.exists():
-                continue
-            print(f"скачиваю {r['video_id']} ...", end=" ", flush=True)
-            ok = download(r["url"], path)
-            print("ok" if ok else "НЕ СКАЧАЛОСЬ")
+            print(f"[{i}/{len(todo_dl)}] {r['video_id']} ...", end=" ", flush=True)
+            ok, err = download(r["url"], path, args.cookies)
+            print("ok" if ok else f"НЕ СКАЧАЛОСЬ: {err}")
             if not ok:
-                failed.append(r["video_id"])
-            time.sleep(1)
+                failed.append((r["video_id"], err))
+            time.sleep(PAUSE_BETWEEN)
         if failed:
-            print(f"\nНе скачалось {len(failed)}: {', '.join(failed[:15])}{' ...' if len(failed) > 15 else ''}")
-            print("Скачай их вручную и положи в data/videos/<video_id>.mp4")
+            print(f"\nНе скачалось {len(failed)}:")
+            for vid, err in failed:
+                print(f"  {vid}: {err}")
+            print("\nЗапусти эту же команду ещё раз: недокачанное докачается. "
+                  "Что не пойдёт совсем, скачай руками в data/videos/<video_id>.mp4")
 
     # 2. оценка стоимости
     missing, no_audio, cached, todo = [], [], [], []

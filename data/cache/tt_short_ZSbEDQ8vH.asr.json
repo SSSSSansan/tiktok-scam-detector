@@ -1,0 +1,16 @@
+{
+  "language": "en",
+  "text": "When I said sleep, remember up, up, bump, bump When I said sleep, remember up, up, bump, bump",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 5.12,
+      "text": "When I said sleep, remember up, up, bump, bump"
+    },
+    {
+      "start": 5.12,
+      "end": 6.66,
+      "text": "When I said sleep, remember up, up, bump, bump"
+    }
+  ]
+}
