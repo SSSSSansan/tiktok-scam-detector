@@ -10,3 +10,6 @@ temp_video.mp4
 audio.wav
 extracted_frames/
 temp_video.wav
+.venv/
+__pycache__/
+*.pyc
