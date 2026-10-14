@@ -1,0 +1,21 @@
+{
+  "language": "en",
+  "text": "I don't want nobody listening, I see them hold precision, give us my own indecision Ain't got no one in that back calling me splurge, let me jump right on the curb Bentley sprint, fly like a bird, spin on the first and the third",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 5.6,
+      "text": "I don't want nobody listening, I see them hold precision, give us my own indecision"
+    },
+    {
+      "start": 5.6,
+      "end": 10.1,
+      "text": "Ain't got no one in that back calling me splurge, let me jump right on the curb"
+    },
+    {
+      "start": 10.1,
+      "end": 14.7,
+      "text": "Bentley sprint, fly like a bird, spin on the first and the third"
+    }
+  ]
+}

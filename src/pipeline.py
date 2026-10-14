@@ -1,60 +1,95 @@
-import pandas as pd
+"""
+Scam Radar: одно видео -> Verdict {video_id, risk, category, evidence[], explanation}.
 
-from src.ingest import download_video_and_audio
-from src.frames import extract_frames
-from src.asr import transcribe_audio
-from src.ocr import extract_text_from_frames
-from src.llm_judge import analyze_video_evidence
+Запуск из корня репозитория:
+    python -m src.pipeline data/videos/tt_7649544344751312150.mp4
+    python -m src.pipeline tt_7649544344751312150                      # по video_id из labels.csv
+    python -m src.pipeline "https://www.tiktok.com/@user/video/123"    # скачает и проанализирует
+    python -m src.pipeline <что угодно> --sources asr                  # только речь (для ablation)
 
-def run_pipeline():
-    # Путь к твоему файлу в папке data
-    file_path = 'data/dataset.xlsx' # Замени на точное имя файла
-    
-    df = pd.read_excel(file_path)
-    
-    # Проходим по каждой строке датафрейма
-    for index, row in df.iterrows():
-        video_url = row['metadata']        # Убедись, что колонка в Excel называется 'url'
-        true_category = row['category'] # Убедись, что колонка называется 'category'
-        print(f"Обработка видео: {video_url} [Категория: {true_category}]")
-        
-        # Здесь в будущем будет вызываться логика скачивания и анализа (ingest, asr, ocr и т.д.)
+Шаги: (скачать) -> ASR -> OCR/VLM из кэша, если они уже посчитаны -> LLM-судья.
+Всё кэшируется в data/cache, повторный запуск на том же видео бесплатный.
+Вердикт сохраняется в data/verdicts/<video_id>.json.
+"""
+import argparse
+import hashlib
+import json
+import re
+import subprocess
+import sys
+from pathlib import Path
 
-def run_pipeline_for_video(video_url):
-    # Шаг 3а: Ингест (скачивание видео + аудио)
-    success = download_video_and_audio(video_url)
-    if not success:
-        return
-        
-    # Шаг 3б: Нарезка кадров
-    extract_frames(video_path="temp_video.mp4", output_dir="extracted_frames")
+from src import llm_judge
+from src.asr import transcribe
+
+VIDEO_DIR = Path("data/videos")
+VERDICT_DIR = Path("data/verdicts")
 
 
-# if __name__ == "__main__":
-#     run_pipeline()
+def resolve_video(arg: str) -> Path:
+    """Принимает путь к файлу, video_id или ссылку. Возвращает путь к mp4."""
+    if arg.startswith("http"):
+        m = re.search(r"tiktok\.com/@[^/]+/(?:video|photo)/(\d+)", arg)
+        vid = f"tt_{m.group(1)}" if m else "url_" + hashlib.sha1(arg.encode()).hexdigest()[:10]
+        path = VIDEO_DIR / f"{vid}.mp4"
+        if not path.exists():
+            VIDEO_DIR.mkdir(parents=True, exist_ok=True)
+            r = subprocess.run(["yt-dlp", "-q", "--no-warnings", "-o", str(path), arg],
+                               capture_output=True, text=True)
+            if not path.exists():
+                sys.exit(f"Не удалось скачать видео:\n{r.stderr[-300:]}")
+        return path
+    p = Path(arg)
+    if p.exists():
+        return p
+    p = VIDEO_DIR / f"{arg}.mp4"
+    if p.exists():
+        return p
+    sys.exit(f"Не нашла видео: {arg}")
+
+
+def analyze(video_path, sources=("asr", "ocr", "vlm", "meta"), use_cache=True) -> dict:
+    """Главная функция проекта: путь к видео -> Verdict."""
+    video_path = Path(video_path)
+    video_id = video_path.stem
+
+    asr = transcribe(video_path) if "asr" in sources else None
+    cached = llm_judge.load_cached_evidence(video_id, [s for s in sources if s != "asr"])
+    verdict = llm_judge.judge(video_id, asr=asr, use_cache=use_cache, **cached)
+
+    VERDICT_DIR.mkdir(parents=True, exist_ok=True)
+    (VERDICT_DIR / f"{video_id}.json").write_text(
+        json.dumps(verdict, ensure_ascii=False, indent=2), encoding="utf-8")
+    return verdict
+
+
+def show(v: dict):
+    bar = "█" * round(v["risk"] * 20) + "░" * (20 - round(v["risk"] * 20))
+    print(f"\nВидео:      {v['video_id']}")
+    print(f"Категория:  {v['category']}")
+    print(f"Риск:       {v['risk']:.2f}  {bar}")
+    print(f"Почему:     {v['explanation']}")
+    if v["evidence"]:
+        print("Улики:")
+        for e in v["evidence"]:
+            mark = "✓" if e.get("verified") else "?"
+            print(f"  {mark} [{e.get('t')}] ({e['source']}) {e['text']}")
+    cost = (v.get("usage") or {}).get("usd")
+    if cost:
+        print(f"\nСтоимость судьи: ${cost:.5f}")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("video", help="путь к mp4, video_id или ссылка")
+    ap.add_argument("--sources", default="asr,ocr,vlm,meta", help="какие источники использовать")
+    ap.add_argument("--json", action="store_true", help="вывести сырой JSON")
+    args = ap.parse_args(argv)
+
+    sources = tuple(s.strip() for s in args.sources.split(",") if s.strip())
+    v = analyze(resolve_video(args.video), sources)
+    print(json.dumps(v, ensure_ascii=False, indent=2)) if args.json else show(v)
+
+
 if __name__ == "__main__":
-    # Укажите реальную или тестовую ссылку на TikTok-видео
-    test_url = "https://vt.tiktok.com/ZSbESuo8m"
-    
-    print("Запуск проверки этапа ингеста...")
-    
-    # 1. Скачиваем видео и аудио
-    success = download_video_and_audio(test_url)
-    
-    if success:
-        # Нарезаем кадры
-        extract_frames("temp_video.mp4", "extracted_frames")
-        
-        print("\n--- ASR (Whisper) ---")
-        speech_segments = transcribe_audio("audio.wav")
-        print("Пример распознанной речи:", speech_segments[:2])
-        
-        print("\n--- OCR (EasyOCR) ---")
-        ocr_data = extract_text_from_frames("extracted_frames")
-        print("Пример текста с кадров:", ocr_data[:2])
-        
-        print("\n-- Анализ через LLM ---")
-        verdict = analyze_video_evidence(speech_segments, ocr_data)
-        print("Результат анализа:", verdict)
-    else:
-        print("Ошибка на этапе скачивания.")
+    main()

@@ -1,0 +1,16 @@
+{
+  "language": "en",
+  "text": "You shot me so damn wrong, you're a bumbum You shot me then you got me numb like gum, you're a-",
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 3.16,
+      "text": "You shot me so damn wrong, you're a bumbum"
+    },
+    {
+      "start": 3.16,
+      "end": 6.28,
+      "text": "You shot me then you got me numb like gum, you're a-"
+    }
+  ]
+}
