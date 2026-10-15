@@ -64,6 +64,22 @@ def _load_calibrator():
         return None
 
 
+_RISK_SENT = re.compile(r"риск\w*[^.]{0,30}\d[.,]\d", re.IGNORECASE)
+_RISK_PHRASE = re.compile(r"[,;]?\s*(?:с\s+)?риск\w*\s+(?:до\s+|на уровне\s+|установлен на\s+(?:уровне\s+)?)?\d[.,]\d+", re.IGNORECASE)
+
+
+def clean_explanation(text: str) -> str:
+    """Судья иногда пишет в объяснении своё число риска («...повышают риск до 0.7»), и оно может
+    не совпасть с итоговым risk (например, после калибровки). Такие предложения убираем:
+    итоговый риск показывается отдельно. Если число стоит во всех предложениях, вырезаем только его."""
+    text = str(text or "").strip()
+    sentences = re.split(r"(?<=[.!?])\s+", text)
+    kept = [x for x in sentences if not _RISK_SENT.search(x)]
+    if kept:
+        return " ".join(kept).strip()
+    return re.sub(r"\s+([.,;])", r"\1", _RISK_PHRASE.sub("", text)).strip()
+
+
 def ensure_evidence(video_path, sources):
     """Досчитывает недостающие улики (OCR, VLM), если их ещё нет в data/cache.
     ASR считается в analyze() сам. Всё кэшируется, готовое не пересчитывается и ничего не стоит."""
@@ -98,6 +114,7 @@ def analyze(video_path, sources=("asr", "ocr", "vlm", "meta"), use_cache=True, c
     cached = llm_judge.load_cached_evidence(video_id, [s for s in sources if s != "asr"])
     verdict = llm_judge.judge(video_id, asr=asr, use_cache=use_cache, **cached)
     verdict["risk_llm"] = verdict["risk"]
+    verdict["explanation"] = clean_explanation(verdict.get("explanation"))
 
     # признаки (регулярки) и калибровка итогового риска
     feats = None
