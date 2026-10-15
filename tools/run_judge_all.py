@@ -29,6 +29,8 @@ def main(argv=None):
     ap.add_argument("--sources", default="asr", help="через запятую: asr,ocr,vlm,meta")
     ap.add_argument("--run", action="store_true", help="реально вызвать OpenAI (платно)")
     ap.add_argument("--limit", type=int, default=None)
+    ap.add_argument("--platform", default="tiktok", choices=["tiktok", "instagram", "all"],
+                    help="по умолчанию только tiktok (основной тест); instagram идёт отдельным файлом")
     args = ap.parse_args(argv)
     sources = tuple(s.strip() for s in args.sources.split(",") if s.strip())
     bad = [s for s in sources if s not in llm_judge.SOURCES]
@@ -39,6 +41,8 @@ def main(argv=None):
         rows = list(csv.DictReader(f))
 
     # судим только тех, у кого есть кэш хотя бы одного из запрошенных источников
+    if args.platform != "all":
+        rows = [r for r in rows if r["platform"] == args.platform]
     ready = [r for r in rows if any((CACHE / f"{r['video_id']}.{s}.json").exists() for s in sources)]
     print(f"Видео в таблице: {len(rows)} | есть данные ({','.join(sources)}): {len(ready)}")
     if not args.run:
@@ -65,7 +69,8 @@ def main(argv=None):
             "explanation": v["explanation"],
         })
 
-    out = Path(f"data/judge_results_{'_'.join(sources)}.csv")
+    suffix = "" if args.platform == "tiktok" else f"_{args.platform}"
+    out = Path(f"data/judge_results_{'_'.join(sources)}{suffix}.csv")
     with open(out, "w", encoding="utf-8", newline="") as f:
         w = csv.DictWriter(f, fieldnames=OUT_COLS)
         w.writeheader()
