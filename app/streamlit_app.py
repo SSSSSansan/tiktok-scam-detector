@@ -35,10 +35,8 @@ MARKERS = {
 
 st.set_page_config(page_title="Scam Radar", page_icon="📡", layout="wide")
 
-
 def find_markers(text: str) -> str:
     return ", ".join(name for name, rx in MARKERS.items() if re.search(rx, text, re.I))
-
 
 def load_json(path: Path) -> dict:
     try:
@@ -47,20 +45,16 @@ def load_json(path: Path) -> dict:
     except Exception:
         return {}
 
-
 def pick_col(df, cands):
     return next((c for c in cands if c in df.columns), None)
-
 
 @st.cache_data
 def load_judge():
     return pd.read_csv(JUDGE_CSV, dtype={"video_id": str}) if JUDGE_CSV.exists() else None
 
-
 @st.cache_data
 def load_labels():
     return pd.read_csv(LABELS_CSV, dtype=str).fillna("") if LABELS_CSV.exists() else None
-
 
 def evidence_from_cache(vid: str) -> pd.DataFrame:
     rows = []
@@ -75,14 +69,12 @@ def evidence_from_cache(vid: str) -> pd.DataFrame:
         rows.append({"t": float(it.get("t", 0)), "source": "текст на экране (OCR)", "text": str(it.get("text", "")).strip()})
     return finalize(rows)
 
-
 def finalize(rows) -> pd.DataFrame:
     df = pd.DataFrame(rows, columns=["t", "source", "text"])
     if df.empty:
         return df
     df["маркеры"] = df["text"].apply(find_markers)
     return df.sort_values("t").reset_index(drop=True)
-
 
 def show_timeline(df: pd.DataFrame):
     if df.empty:
@@ -106,19 +98,84 @@ def show_timeline(df: pd.DataFrame):
                  use_container_width=True, hide_index=True)
 
 
-def risk_box(risk):
-    if risk is None:
+# --- НОВАЯ ФУНКЦИЯ КАСТОМНОГО UI ---
+def render_custom_ui(risk_score, predicted_category, true_label):
+    if risk_score is None:
         st.info("Для этого видео нет результата судьи.")
         return
-    st.metric("Risk score", f"{risk:.2f}")
-    st.progress(min(max(risk, 0.0), 1.0))
-    if risk >= 0.7:
-        st.error("Высокий риск")
-    elif risk >= 0.4:
-        st.warning("Средний риск")
-    else:
-        st.success("Низкий риск")
 
+    # Список категорий из хакатон-брифа
+    categories = ["Investment platform", "Pyramid", "Betting", "Giveaway", "Job offer", "none"]
+    
+    # Формируем HTML для кнопок-категорий
+    pills_html = ""
+    for cat in categories:
+        cat_clean = cat.lower()
+        pred_clean = str(predicted_category).lower().replace("_", " ")
+        active_class = "active-pill" if cat_clean == pred_clean else ""
+        pills_html += f'<div class="scam-pill {active_class}">{cat}</div>'
+
+    # Рассчитываем позицию маркера и форматируем текст
+    try:
+        risk_val = float(risk_score)
+        marker_pos = max(0, min(100, int(risk_val * 100)))
+        risk_text = f"{risk_val:.2f}"
+    except (ValueError, TypeError):
+        marker_pos = 0
+        risk_text = "N/A"
+
+    custom_html = f"""
+<style>
+.risk-section {{ font-family: sans-serif; margin-bottom: 2.5rem; }}
+.risk-title-container {{ display: flex; align-items: baseline; gap: 12px; margin-bottom: 0.2rem; }}
+.risk-title {{ font-size: 1.5rem; font-weight: bold; color: #f9fafb; margin: 0; }}
+.risk-number {{ font-size: 1.8rem; font-weight: bold; color: #3b82f6; margin: 0; }}
+.risk-desc {{ color: #9ca3af; font-size: 1rem; margin-bottom: 1.5rem; }}
+
+.gradient-bar-container {{ position: relative; width: 100%; height: 12px; margin-bottom: 1rem; margin-top: 1rem; }}
+.gradient-bar {{ width: 100%; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #34d399 0%, #fbbf24 50%, #f87171 100%); }}
+.marker {{ position: absolute; top: -8px; height: 28px; width: 6px; background-color: #ffffff; border: 1px solid #000000; border-radius: 3px; transform: translateX(-50%); left: {marker_pos}%; box-shadow: 0 0 6px rgba(0,0,0,0.6); z-index: 10; transition: left 0.5s ease-in-out; }}
+.scale-labels {{ display: flex; justify-content: space-between; color: #9ca3af; font-size: 0.9rem; }}
+
+.pills-container {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 1rem; }}
+.scam-pill {{ padding: 8px 16px; border-radius: 20px; border: 1px solid #4b5563; background-color: transparent; color: #f9fafb; font-size: 14px; font-family: sans-serif; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s; }}
+.scam-pill.active-pill {{ border: 2px solid #3b82f6 !important; background-color: #3b82f6 !important; font-weight: bold; color: #ffffff !important; box-shadow: 0 4px 6px rgba(59, 130, 246, 0.3); }}
+
+.true-label-box {{ margin-top: 2rem; padding: 12px; background-color: rgba(59, 130, 246, 0.1); border-left: 4px solid #3b82f6; border-radius: 4px; font-family: sans-serif; color: #f9fafb; }}
+</style>
+
+<div class="risk-section">
+<div style="color: #ef4444; font-weight: bold; font-size: 0.9rem; margin-bottom: 4px;">A</div>
+<div class="risk-title-container">
+<div class="risk-title">Risk score:</div>
+<div class="risk-number">{risk_text}</div>
+</div>
+<div class="risk-desc">A value from 0 to 1.</div>
+<div class="gradient-bar-container">
+<div class="gradient-bar"></div>
+<div class="marker"></div>
+</div>
+<div class="scale-labels">
+<span>0.0</span>
+<span>0.5</span>
+<span>1.0</span>
+</div>
+</div>
+
+<div class="risk-section">
+<div style="color: #ef4444; font-weight: bold; font-size: 0.9rem; margin-bottom: 4px;">B</div>
+<div class="risk-title">Scam category</div>
+<div class="risk-desc">The type of scam, or "none".</div>
+<div class="pills-container">
+{pills_html}
+</div>
+<div class="true-label-box">
+<strong>Ground Truth (разметка):</strong> {true_label}
+</div>
+</div>
+"""
+    
+    st.markdown(custom_html, unsafe_allow_html=True)
 
 st.title("📡 Scam Radar")
 st.caption("Риск-сигнал для модерации, а не обвинение. Хранятся только ID видео.")
@@ -154,15 +211,22 @@ if mode == "Видео из датасета":
     with left:
         mp4 = next(iter(VIDEOS.rglob(f"*{vid}*.mp4")), None) if VIDEOS.exists() else None
         if mp4:
+            # Оборачиваем видео в контейнер, чтобы ограничить его ширину до 300px
+            st.markdown(
+                """<style>
+                video { max-width: 300px !important; max-height: 500px !important; border-radius: 8px; }
+                </style>""", 
+                unsafe_allow_html=True
+            )
             st.video(str(mp4))
         else:
             st.caption("Видео не скачано локально (оно не лежит в репо).")
         st.caption(f"ID: {vid}")
+    
     with right:
-        risk_box(risk)
-        c1, c2 = st.columns(2)
-        c1.metric("Категория (система)", pred_cat)
-        c2.metric("Верная метка (разметка)", true_label)
+        # Вызов функции кастомного дизайна
+        render_custom_ui(risk, pred_cat, true_label)
+        
         if expl:
             st.markdown(f"**Объяснение судьи:** {expl}")
 
@@ -177,7 +241,16 @@ else:
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
             tmp.write(up.read())
             path = tmp.name
+        
+        # То же самое ограничение ширины видео для режима загрузки
+        st.markdown(
+            """<style>
+            video { max-width: 300px !important; max-height: 500px !important; border-radius: 8px; margin: 0 auto; display: block; }
+            </style>""", 
+            unsafe_allow_html=True
+        )
         st.video(path)
+        
         from src.ocr import process_video  # тяжёлый импорт — только здесь
 
         with st.spinner("Распознаю текст на кадрах..."):
