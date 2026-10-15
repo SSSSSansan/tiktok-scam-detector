@@ -64,11 +64,36 @@ def _load_calibrator():
         return None
 
 
-def analyze(video_path, sources=("asr", "ocr", "vlm", "meta"), use_cache=True, calibrate=True) -> dict:
-    """Главная функция проекта: путь к видео -> Verdict."""
+def ensure_evidence(video_path, sources):
+    """Досчитывает недостающие улики (OCR, VLM), если их ещё нет в data/cache.
+    ASR считается в analyze() сам. Всё кэшируется, готовое не пересчитывается и ничего не стоит."""
+    video_path = Path(video_path)
+    video_id = video_path.stem
+    cache = llm_judge.CACHE_DIR
+    if "ocr" in sources and not (cache / f"{video_id}.ocr.json").exists():
+        try:
+            from src.ocr import process_video  # код Арай, бесплатно, локально (нужен easyocr)
+            process_video(video_path, video_id=video_id)
+        except Exception as e:
+            print(f"[предупреждение] OCR не посчитался ({e}), идём без него", file=sys.stderr)
+    if "vlm" in sources and not (cache / f"{video_id}.vlm.json").exists():
+        try:
+            from src.vlm import describe_video  # платно, около $0.002 за видео
+            describe_video(video_path)
+        except Exception as e:
+            print(f"[предупреждение] VLM не посчитался ({e}), идём без него", file=sys.stderr)
+
+
+def analyze(video_path, sources=("asr", "ocr", "vlm", "meta"), use_cache=True, calibrate=True,
+            compute_missing=True) -> dict:
+    """Главная функция проекта: путь к видео -> Verdict.
+    compute_missing=True: если для видео ещё нет OCR/VLM, они считаются на лету (для новых видео и демо).
+    compute_missing=False: берём только то, что уже лежит в кэше."""
     video_path = Path(video_path)
     video_id = video_path.stem
 
+    if compute_missing:
+        ensure_evidence(video_path, sources)
     asr = transcribe(video_path) if "asr" in sources else None
     cached = llm_judge.load_cached_evidence(video_id, [s for s in sources if s != "asr"])
     verdict = llm_judge.judge(video_id, asr=asr, use_cache=use_cache, **cached)
@@ -125,11 +150,13 @@ def main(argv=None):
     ap.add_argument("video", help="путь к mp4, video_id или ссылка")
     ap.add_argument("--sources", default="asr,ocr,vlm,meta", help="какие источники использовать")
     ap.add_argument("--no-calibration", action="store_true", help="не применять калибратор")
+    ap.add_argument("--cache-only", action="store_true", help="не считать недостающие OCR/VLM, только готовый кэш")
     ap.add_argument("--json", action="store_true", help="вывести сырой JSON")
     args = ap.parse_args(argv)
 
     sources = tuple(s.strip() for s in args.sources.split(",") if s.strip())
-    v = analyze(resolve_video(args.video), sources, calibrate=not args.no_calibration)
+    v = analyze(resolve_video(args.video), sources, calibrate=not args.no_calibration,
+                    compute_missing=not args.cache_only)
     print(json.dumps(v, ensure_ascii=False, indent=2)) if args.json else show(v)
 
 
