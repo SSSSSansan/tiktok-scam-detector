@@ -1,0 +1,35 @@
+{
+  "video_id": "tt_7486857481570880790",
+  "items": [
+    {
+      "t": 0.0,
+      "text": "ХZП7816",
+      "confidence": 0.439
+    },
+    {
+      "t": 3.0,
+      "text": "Activate code for bonus",
+      "confidence": 0.866
+    },
+    {
+      "t": 3.0,
+      "text": "proai| ACTIVATE",
+      "confidence": 0.6
+    },
+    {
+      "t": 3.0,
+      "text": "bontses",
+      "confidence": 0.543
+    },
+    {
+      "t": 6.0,
+      "text": "DICE",
+      "confidence": 0.943
+    },
+    {
+      "t": 6.0,
+      "text": "~итнтаъ $40 00",
+      "confidence": 0.365
+    }
+  ]
+}
