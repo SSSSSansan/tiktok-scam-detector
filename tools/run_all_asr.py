@@ -39,7 +39,7 @@ def video_duration(path: Path) -> float:
 
 def download(url: str, path: Path, cookies=None):
     """Возвращает (успех, причина_ошибки). Недокачанные куски yt-dlp докачивает сам."""
-    cmd = ["yt-dlp", "-q", "--no-warnings", "--retries", "10", "--socket-timeout", "30"]
+    cmd = ["yt-dlp", "-q", "--no-warnings", "--retries", "10", "--socket-timeout", "30","--no-check-certificates"]
     if cookies:
         cmd += ["--cookies-from-browser", cookies]
     cmd += ["-o", str(path), url]
