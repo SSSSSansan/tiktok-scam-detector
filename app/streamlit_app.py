@@ -21,6 +21,12 @@ JUDGE_CSV = next(
 )
 LABELS_CSV = ROOT / "data" / "labels.csv"
 
+try:
+    from src.pipeline import clean_explanation  # убирает из объяснения числа риска, которые не совпадают с итоговым
+except Exception:
+    def clean_explanation(text):
+        return str(text or "").strip()
+
 # Быстрые маркеры только для подсветки в демо (это НЕ итоговая модель)
 MARKERS = {
     "ссылка Telegram/WhatsApp": r"t\.me|telegram|телеграм|wa\.me|whatsapp|ватсап",
@@ -101,7 +107,7 @@ def show_timeline(df: pd.DataFrame):
 # --- НОВАЯ ФУНКЦИЯ КАСТОМНОГО UI ---
 def render_custom_ui(risk_score, predicted_category, true_label):
     if risk_score is None:
-        st.info("Для этого видео нет результата судьи.")
+        st.info("Для этого видео нет готового разбора. Загрузите его во вкладке «Загрузить mp4».")
         return
 
     # Список категорий из хакатон-брифа
@@ -180,7 +186,8 @@ def render_custom_ui(risk_score, predicted_category, true_label):
 st.title("📡 Scam Radar")
 st.caption("Риск-сигнал для модерации, а не обвинение. Хранятся только ID видео.")
 
-mode = st.sidebar.radio("Режим", ["Видео из датасета", "Загрузить mp4 (OCR локально)"])
+mode = st.sidebar.radio("Режим", ["Видео из датасета", "Загрузить mp4 (полный анализ)"])
+st.sidebar.caption("Анализ: речь + текст на экране + кадры → LLM-судья → калибровка риска")
 
 if mode == "Видео из датасета":
     judge, labels = load_judge(), load_labels()
@@ -228,32 +235,47 @@ if mode == "Видео из датасета":
         render_custom_ui(risk, pred_cat, true_label)
         
         if expl:
-            st.markdown(f"**Объяснение судьи:** {expl}")
+            st.markdown(f"**Объяснение:** {clean_explanation(expl)}")
 
     st.subheader("Таймлайн улик")
     show_timeline(evidence_from_cache(vid))
 
 else:
-    st.info("Здесь считается только OCR (бесплатно, локально). Полный вердикт с risk-скором "
-            "считает LLM-судья, он запускается отдельно.")
+    st.info("Полный анализ нового видео: речь (Whisper), текст на экране (OCR), описание кадров и LLM-судья. "
+            "Занимает около минуты. Нужен ключ OpenAI в файле .env на этом компьютере.")
     up = st.file_uploader("Загрузи mp4", type=["mp4", "mov"])
-    if up is not None and st.button("Запустить OCR"):
+    if up is not None and st.button("Запустить анализ"):
         with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
             tmp.write(up.read())
             path = tmp.name
-        
+
         # То же самое ограничение ширины видео для режима загрузки
         st.markdown(
             """<style>
             video { max-width: 300px !important; max-height: 500px !important; border-radius: 8px; margin: 0 auto; display: block; }
-            </style>""", 
+            </style>""",
             unsafe_allow_html=True
         )
         st.video(path)
-        
-        from src.ocr import process_video  # тяжёлый импорт — только здесь
 
-        with st.spinner("Распознаю текст на кадрах..."):
-            res = process_video(path, video_id="upload", save=False)
-        rows = [{"t": float(i["t"]), "source": "текст на экране (OCR)", "text": i["text"]} for i in res["items"]]
-        show_timeline(finalize(rows))
+        from src.pipeline import analyze  # полный вердикт: речь + OCR + кадры + судья (+ калибровка, если есть)
+
+        with st.spinner("Считаю полный вердикт (речь, текст, кадры, судья), это около минуты..."):
+            try:
+                verdict = analyze(path)
+            except Exception as e:
+                verdict = None
+                st.error(f"Не удалось посчитать вердикт: {e}")
+
+        if verdict:
+            render_custom_ui(verdict["risk"], verdict["category"], "— (новое видео, разметки нет)")
+            if verdict.get("calibrated"):
+                st.caption(f"Итоговый риск калиброван. Оценка судьи до калибровки: {verdict['risk_llm']:.2f}")
+            st.markdown(f"**Объяснение:** {verdict['explanation']}")
+            if verdict.get("evidence"):
+                st.markdown("**Улики:**")
+                for e in verdict["evidence"]:
+                    st.markdown(f"- [{e.get('t')}] ({e['source']}) {e['text']}")
+
+            st.subheader("Таймлайн улик")
+            show_timeline(evidence_from_cache(Path(path).stem))  # речь и OCR уже лежат в кэше после analyze
