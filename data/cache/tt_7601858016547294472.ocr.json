@@ -1,0 +1,105 @@
+{
+  "video_id": "tt_7601858016547294472",
+  "items": [
+    {
+      "t": 0.0,
+      "text": "ONE",
+      "confidence": 0.949
+    },
+    {
+      "t": 0.0,
+      "text": "Куда вложить первые $3000?",
+      "confidence": 0.905
+    },
+    {
+      "t": 0.0,
+      "text": "Ответ Гранта Кардона",
+      "confidence": 0.995
+    },
+    {
+      "t": 0.0,
+      "text": "Инвестируй",
+      "confidence": 0.993
+    },
+    {
+      "t": 3.0,
+      "text": "NTCARDONE",
+      "confidence": 0.914
+    },
+    {
+      "t": 6.0,
+      "text": "акции; не",
+      "confidence": 0.868
+    },
+    {
+      "t": 9.0,
+      "text": "в себя:",
+      "confidence": 0.95
+    },
+    {
+      "t": 12.0,
+      "text": "ARDONE",
+      "confidence": 1.0
+    },
+    {
+      "t": 12.0,
+      "text": "He веди себя",
+      "confidence": 0.65
+    },
+    {
+      "t": 15.0,
+      "text": "INTGARDONE",
+      "confidence": 0.645
+    },
+    {
+      "t": 15.0,
+      "text": "Тынамелиb",
+      "confidence": 0.612
+    },
+    {
+      "t": 18.0,
+      "text": "Признайся",
+      "confidence": 1.0
+    },
+    {
+      "t": 21.0,
+      "text": "Когдавы",
+      "confidence": 0.652
+    },
+    {
+      "t": 24.0,
+      "text": "курсы; на те;",
+      "confidence": 0.864
+    },
+    {
+      "t": 27.0,
+      "text": "посещаете",
+      "confidence": 0.942
+    },
+    {
+      "t": 30.0,
+      "text": "вам нужно",
+      "confidence": 1.0
+    },
+    {
+      "t": 33.0,
+      "text": "Найдите",
+      "confidence": 0.766
+    },
+    {
+      "t": 36.0,
+      "text": "занимайте",
+      "confidence": 1.0
+    },
+    {
+      "t": 39.0,
+      "text": "полезные",
+      "confidence": 0.929
+    },
+    {
+      "t": 42.0,
+      "text": "путьэ",
+      "confidence": 0.465
+    }
+  ]
+}

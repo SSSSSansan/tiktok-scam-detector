@@ -1,0 +1,25 @@
+{
+  "video_id": "tt_short_ZSbEDd1tK",
+  "items": [
+    {
+      "t": 0.0,
+      "text": "\"ЗАРАБАТЫВАЙ ИЗ [ОПА\"",
+      "confidence": 0.707
+    },
+    {
+      "t": 0.0,
+      "text": "Ярасаалу",
+      "confidence": 0.513
+    },
+    {
+      "t": 3.0,
+      "text": "ВСе[ОвОрят:",
+      "confidence": 0.389
+    },
+    {
+      "t": 6.0,
+      "text": "8 [асалу",
+      "confidence": 0.362
+    }
+  ]
+}

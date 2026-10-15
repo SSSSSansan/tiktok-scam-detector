@@ -1,0 +1,50 @@
+{
+  "video_id": "tt_7356963850547236114",
+  "items": [
+    {
+      "t": 3.0,
+      "text": "J02 0",
+      "confidence": 0.41
+    },
+    {
+      "t": 3.0,
+      "text": "Vahtar",
+      "confidence": 0.348
+    },
+    {
+      "t": 9.0,
+      "text": "002 ТУРБО:1.4",
+      "confidence": 0.759
+    },
+    {
+      "t": 9.0,
+      "text": "РА(XОД:7.6 %",
+      "confidence": 0.409
+    },
+    {
+      "t": 27.0,
+      "text": "51g 9869",
+      "confidence": 0.694
+    },
+    {
+      "t": 33.0,
+      "text": "D02 D02",
+      "confidence": 0.479
+    },
+    {
+      "t": 33.0,
+      "text": "@AUTOAGASHI",
+      "confidence": 1.0
+    },
+    {
+      "t": 33.0,
+      "text": "+82 10-7423-3052",
+      "confidence": 0.946
+    },
+    {
+      "t": 36.0,
+      "text": "МЮЮВИШЫСЯ",
+      "confidence": 0.475
+    }
+  ]
+}
