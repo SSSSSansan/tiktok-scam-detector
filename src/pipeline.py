@@ -126,7 +126,8 @@ def analyze(video_path, sources=("asr", "ocr", "vlm", "meta"), use_cache=True, c
         feats = None
         print(f"[предупреждение] признаки не посчитались ({e})", file=sys.stderr)
 
-    calibrator = _load_calibrator() if (calibrate and feats is not None) else None
+    # если улик совсем нет, калибровать нечего: оставляем оценку судьи (иначе «нет речи» превращается в риск ~0.5)
+    calibrator = _load_calibrator() if (calibrate and feats is not None and not verdict.get("no_evidence")) else None
     if calibrator is not None:
         n_words = len(str((asr or {}).get("text") or "").split())
         # калибратор обучали на признаках только по речи, поэтому и здесь считаем их только по речи

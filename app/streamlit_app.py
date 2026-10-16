@@ -20,6 +20,7 @@ JUDGE_CSV = next(
     ROOT / "data" / "judge_results_asr.csv",
 )
 LABELS_CSV = ROOT / "data" / "labels.csv"
+IG_CSV = ROOT / "data" / "judge_results_asr_ocr_vlm_instagram.csv"  # внешняя проверка: Instagram Reels
 
 try:
     from src.pipeline import clean_explanation  # убирает из объяснения числа риска, которые не совпадают с итоговым
@@ -55,8 +56,9 @@ def pick_col(df, cands):
     return next((c for c in cands if c in df.columns), None)
 
 @st.cache_data
-def load_judge():
-    return pd.read_csv(JUDGE_CSV, dtype={"video_id": str}) if JUDGE_CSV.exists() else None
+def load_judge(path: str = ""):
+    p = Path(path) if path else JUDGE_CSV
+    return pd.read_csv(p, dtype={"video_id": str}) if p.exists() else None
 
 @st.cache_data
 def load_labels():
@@ -108,7 +110,7 @@ def show_timeline(df: pd.DataFrame):
 # --- НОВАЯ ФУНКЦИЯ КАСТОМНОГО UI ---
 def render_custom_ui(risk_score, predicted_category, true_label):
     if risk_score is None:
-        st.info("Для этого видео нет готового разбора. Загрузите его во вкладке «Загрузить mp4».")
+        st.info("Для этого видео нет готового разбора. Проверь его в режиме «Новое видео».")
         return
 
     # Список категорий из хакатон-брифа
@@ -187,11 +189,23 @@ def render_custom_ui(risk_score, predicted_category, true_label):
 st.title("📡 Scam Radar")
 st.caption("Риск-сигнал для модерации, а не обвинение. Хранятся только ID видео.")
 
-mode = st.sidebar.radio("Режим", ["Видео из датасета", "Загрузить mp4 (полный анализ)"])
+MODE_DATA = "Видео из датасета (TikTok)"
+MODE_IG = "Instagram Reels (сохранённые)"
+MODE_NEW = "Новое видео: ссылка или mp4"
+mode = st.sidebar.radio("Режим", [MODE_DATA, MODE_IG, MODE_NEW])
 st.sidebar.caption("Анализ: речь + текст на экране + кадры → LLM-судья → калибровка риска")
 
-if mode == "Видео из датасета":
-    judge, labels = load_judge(), load_labels()
+if mode in (MODE_DATA, MODE_IG):
+    if mode == MODE_IG:
+        st.info("Внешняя проверка на Instagram: 69 reels, на которых мы ничего не подбирали (судья по речи, тексту и кадрам). "
+                "Свежий reels можно проверить в режиме «Новое видео»: вставь ссылку.")
+        judge = load_judge(str(IG_CSV))
+        if judge is None:
+            st.warning("Нет файла data/judge_results_asr_ocr_vlm_instagram.csv: подтяни свежий main (git pull).")
+            st.stop()
+    else:
+        judge = load_judge()
+    labels = load_labels()
     ids = sorted(judge["video_id"].astype(str).unique()) if judge is not None else \
         sorted(p.name.split(".")[0] for p in CACHE.glob("*.ocr.json"))
     if not ids:
@@ -244,7 +258,7 @@ if mode == "Видео из датасета":
 else:
     st.info("Полный анализ нового видео: речь (Whisper), текст на экране (OCR), описание кадров и LLM-судья. "
             "Занимает около минуты. Нужен ключ OpenAI в файле .env на этом компьютере.")
-    url = st.text_input("Ссылка на TikTok-видео (или загрузи файл ниже)", placeholder="https://www.tiktok.com/@user/video/123...")
+    url = st.text_input("Ссылка на TikTok или Instagram Reels (или загрузи файл ниже)", placeholder="https://www.tiktok.com/@user/video/123...")
     up = st.file_uploader("Или загрузи mp4", type=["mp4", "mov"])
     if (url.strip() or up is not None) and st.button("Запустить анализ"):
         path = None
@@ -254,7 +268,7 @@ else:
                 try:
                     path = str(resolve_video(url.strip()))
                 except BaseException as e:  # resolve_video при ошибке вызывает sys.exit
-                    st.error(f"Не удалось скачать видео по ссылке: {e}. Попробуй загрузить файл.")
+                    st.error(f"Не удалось скачать видео по ссылке (Instagram иногда блокирует скачивание): {e}. Попробуй загрузить файл.")
         else:
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
                 tmp.write(up.read())
