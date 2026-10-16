@@ -87,19 +87,20 @@ def show_timeline(df: pd.DataFrame):
         st.info("Улик нет: в видео не найдено ни речи, ни текста на экране.")
         return
     d = df.copy()
-    d["подозрительно"] = d["маркеры"].apply(lambda x: "да" if x else "нет")
+    d["тревожные слова"] = d["маркеры"].apply(lambda x: "найдены" if x else "не найдены")
     chart = (
         alt.Chart(d)
         .mark_circle(size=140)
         .encode(
             x=alt.X("t:Q", title="секунды"),
             y=alt.Y("source:N", title=None),
-            color=alt.Color("подозрительно:N", scale=alt.Scale(domain=["да", "нет"], range=["#d62728", "#9aa0a6"])),
+            color=alt.Color("тревожные слова:N", scale=alt.Scale(domain=["найдены", "не найдены"], range=["#d62728", "#9aa0a6"])),
             tooltip=["t", "source", "text", "маркеры"],
         )
         .properties(height=140)
     )
     st.altair_chart(chart, use_container_width=True)
+    st.caption("Красная точка: в этой фразе найдены тревожные слова («гарантия», «без вложений», «пиши в директ» и т.п.). Серая: не найдены. Итоговый риск считает судья по всему видео, а не по этим точкам.")
     st.dataframe(df.rename(columns={"t": "сек", "source": "источник", "text": "текст"}),
                  use_container_width=True, hide_index=True)
 
@@ -243,11 +244,24 @@ if mode == "Видео из датасета":
 else:
     st.info("Полный анализ нового видео: речь (Whisper), текст на экране (OCR), описание кадров и LLM-судья. "
             "Занимает около минуты. Нужен ключ OpenAI в файле .env на этом компьютере.")
-    up = st.file_uploader("Загрузи mp4", type=["mp4", "mov"])
-    if up is not None and st.button("Запустить анализ"):
-        with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
-            tmp.write(up.read())
-            path = tmp.name
+    url = st.text_input("Ссылка на TikTok-видео (или загрузи файл ниже)", placeholder="https://www.tiktok.com/@user/video/123...")
+    up = st.file_uploader("Или загрузи mp4", type=["mp4", "mov"])
+    if (url.strip() or up is not None) and st.button("Запустить анализ"):
+        path = None
+        if url.strip():
+            from src.pipeline import resolve_video  # скачивает видео по ссылке через yt-dlp
+            with st.spinner("Скачиваю видео по ссылке..."):
+                try:
+                    path = str(resolve_video(url.strip()))
+                except BaseException as e:  # resolve_video при ошибке вызывает sys.exit
+                    st.error(f"Не удалось скачать видео по ссылке: {e}. Попробуй загрузить файл.")
+        else:
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                tmp.write(up.read())
+                path = tmp.name
+    else:
+        path = None
+    if path:
 
         # То же самое ограничение ширины видео для режима загрузки
         st.markdown(
